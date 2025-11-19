@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
 import '../widgets/tracker_card.dart';
+import '../services/api_service.dart';
 
 class BalanceTrackerScreen extends StatefulWidget {
   const BalanceTrackerScreen({super.key});
@@ -9,11 +11,11 @@ class BalanceTrackerScreen extends StatefulWidget {
 }
 
 class _BalanceTrackerScreenState extends State<BalanceTrackerScreen> {
-
   double _focusHours = 8.0;
   double _restQuality = 3.0;
   String _selectedEmoji = '🙂';
   bool _isSaving = false;
+  bool _isLoadingHistory = true;
 
   final Map<String, String> _emojiMap = {
     '😩': 'Muito Estressado',
@@ -23,32 +25,66 @@ class _BalanceTrackerScreenState extends State<BalanceTrackerScreen> {
     '🥳': 'Excelente/Produtivo',
   };
 
-  // Função preparada para salvar os dados no backend/database
+  String _getEmojiLabel(String emoji) {
+    switch (emoji) {
+      case '😩': return 'Pessimo';
+      case '😔': return 'Ruim';
+      case '🙂': return 'Neutro';
+      case '😊': return 'Bom';
+      case '🥳': return 'Otimo';
+      default: return 'Neutro';
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
   Future<void> _saveDailyLog() async {
-    setState(() {
-      _isSaving = true;
-    });
+    setState(() => _isSaving = true);
 
-    // --- PONTO DE INTEGRAÇÃO COM BACKEND: SALVAR LOG (ATUALIZADO) ---
-    // O body JSON agora inclui "horas_foco"
-    // {
-    //   "data": "2024-01-01", // (O backend deve gerar a data atual)
-    //   "horas_foco": _focusHours,
-    //   "qualidade_descanso": _restQuality,
-    //   "emocional": _selectedEmoji
-    // }
-    
-    // Simulação de espera do backend
-    await Future.delayed(const Duration(seconds: 1));
+    try {
+      final Map<String, dynamic> bodyData = {
+        "worktime": _focusHours.toInt(),
+        "restQuality": _restQuality.toInt(),
+        "emotionalState": _getEmojiLabel(_selectedEmoji)
+      };
 
-    setState(() {
-      _isSaving = false;
-    });
+      final response = await ApiService.postAuthenticated('/monitor', bodyData);
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Log Diário salvo com sucesso! As métricas PL/SQL serão atualizadas.')),
-      );
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Registro diário salvo com sucesso!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        print("Erro Monitor: ${response.body}");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Erro ao salvar: ${response.statusCode}'), 
+              backgroundColor: Colors.red
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print("Erro exceção: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Erro de conexão.'), 
+            backgroundColor: Colors.red
+          ),
+        );
+      }
+    } finally {
+      setState(() => _isSaving = false);
     }
   }
 
@@ -56,7 +92,7 @@ class _BalanceTrackerScreenState extends State<BalanceTrackerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Monitor de Equilíbrio Diário'),
+        title: const Text('Monitor de Equilíbrio'),
         automaticallyImplyLeading: false,
       ),
       body: SingleChildScrollView(
@@ -65,13 +101,16 @@ class _BalanceTrackerScreenState extends State<BalanceTrackerScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Text(
-              'Registre seu dia para visualizar padrões e manter a saúde.',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.grey.shade600),
+              'Como foi o seu dia hoje?',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold, 
+                color: const Color(0xFF1F2937)
+              ),
             ),
-            const SizedBox(height: 30),
+            const SizedBox(height: 20),
 
             TrackerCard(
-              title: '1. Tempo de Foco (Horas Trabalhadas)',
+              title: '1. Tempo de Foco (Horas)',
               child: Column(
                 children: [
                   Slider(
@@ -80,34 +119,26 @@ class _BalanceTrackerScreenState extends State<BalanceTrackerScreen> {
                     max: 12,
                     divisions: 12,
                     label: _focusHours.round().toString(),
-                    onChanged: (double value) {
-                      setState(() {
-                        _focusHours = value;
-                      });
-                    },
+                    onChanged: (v) => setState(() => _focusHours = v),
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 10.0),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: const [
-                        Text('0h', style: TextStyle(fontSize: 12)),
-                        Text('12h', style: TextStyle(fontSize: 12)),
-                      ],
+                      children: const [Text('0h'), Text('12h')],
                     ),
                   ),
-                  const SizedBox(height: 10),
                   Text(
-                    '${_focusHours.toStringAsFixed(0)} horas', // Display principal
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    '${_focusHours.toInt()} horas', 
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 15),
 
             TrackerCard(
-              title: '2. Qualidade do Seu Descanso (1 a 5)',
+              title: '2. Qualidade do Descanso',
               child: Column(
                 children: [
                   Slider(
@@ -116,65 +147,61 @@ class _BalanceTrackerScreenState extends State<BalanceTrackerScreen> {
                     max: 5,
                     divisions: 4,
                     label: _restQuality.round().toString(),
-                    onChanged: (double value) {
-                      setState(() {
-                        _restQuality = value;
-                      });
-                    },
+                    onChanged: (v) => setState(() => _restQuality = v),
                   ),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: const [
-                      Text('1 - Ruim', style: TextStyle(fontSize: 12)),
-                      Text('5 - Excelente', style: TextStyle(fontSize: 12)),
-                    ],
+                    children: const [Text('Ruim'), Text('Excelente')],
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 15),
 
             TrackerCard(
-              title: '3. Seu Nível Emocional Geral Hoje',
+              title: '3. Como se sente?',
               child: Column(
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: _emojiMap.keys.map((emoji) {
                       return GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _selectedEmoji = emoji;
-                          });
-                        },
+                        onTap: () => setState(() => _selectedEmoji = emoji),
                         child: CircleAvatar(
-                          radius: _selectedEmoji == emoji ? 25 : 20,
-                          backgroundColor: _selectedEmoji == emoji ? Theme.of(context).colorScheme.secondary.withOpacity(0.3) : Colors.transparent,
-                          child: Text(emoji, style: const TextStyle(fontSize: 30)),
+                          radius: _selectedEmoji == emoji ? 24 : 20,
+                          // Uso de .withValues para compatibilidade
+                          backgroundColor: _selectedEmoji == emoji 
+                              ? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.3) 
+                              : Colors.transparent,
+                          child: Text(emoji, style: const TextStyle(fontSize: 28)),
                         ),
                       );
                     }).toList(),
                   ),
                   const SizedBox(height: 10),
-                  Text('Você se sente: ${_emojiMap[_selectedEmoji]}',
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                  Text(
+                    _emojiMap[_selectedEmoji]!, 
+                    style: const TextStyle(fontWeight: FontWeight.bold)
+                  ),
                 ],
               ),
             ),
             const SizedBox(height: 30),
 
-            // Botão de Salvar Log
-            Center(
-              child: _isSaving
-                  ? const CircularProgressIndicator()
-                  : ElevatedButton.icon(
-                      onPressed: _saveDailyLog,
-                      icon: const Icon(Icons.save),
-                      label: const Text('Salvar Log do Dia'),
-                      style: ElevatedButton.styleFrom(
-                        minimumSize: const Size(200, 50),
-                      ),
-                    ),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton.icon(
+                onPressed: _isSaving ? null : _saveDailyLog,
+                icon: _isSaving 
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.check_circle),
+                label: Text(_isSaving ? 'Salvando...' : 'Registrar Dia'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).primaryColor,
+                  foregroundColor: Colors.white,
+                ),
+              ),
             ),
           ],
         ),

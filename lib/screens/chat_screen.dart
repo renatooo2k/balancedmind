@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
 import '../widgets/chat_bubble.dart';
+import '../services/api_service.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -10,12 +12,11 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final List<Map<String, String>> _messages = [
-    {'role': 'ai', 'text': 'Olá! Sou sua mentora de equilíbrio. Em que posso ajudar hoje? (Dica: Pergunte sobre como lidar com a procrastinação.)'}
+    {'role': 'ai', 'text': 'Olá! Sou sua mentora de equilíbrio. Como você está se sentindo?'}
   ];
   final TextEditingController _textController = TextEditingController();
   bool _isSending = false;
 
-  // Função preparada para a chamada da API do Chatbot
   Future<void> _sendMessage() async {
     final userMessage = _textController.text.trim();
     if (userMessage.isEmpty) return;
@@ -26,17 +27,36 @@ class _ChatScreenState extends State<ChatScreen> {
       _isSending = true;
     });
 
-    // --- PONTO DE INTEGRAÇÃO COM API CHATBOT ---
-    // Aqui você faria a chamada HTTP (POST) para a API do seu Chatbot.
-    // O body JSON DEVE ser: { "message": userMessage }
+    try {
+      final response = await ApiService.postAuthenticated(
+        '/ai/chat', 
+        {
+          "message": userMessage,
+          "moodRating": 3
+        }
+      );
 
-    // Simulação de resposta da IA
-    await Future.delayed(const Duration(seconds: 2));
-    final aiResponse = "Essa é uma excelente pergunta! O BalancedMind recomenda que você comece com o exercício 'Pausa de 5 Minutos' na Biblioteca de Pausas para redefinir seu foco. Você gostaria de adicionar essa atividade ao seu log diário?";
-    
-    if (mounted) {
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        final aiText = data['response'] ?? "Não entendi a resposta.";
+
+        setState(() {
+          _messages.add({'role': 'ai', 'text': aiText});
+        });
+      } else {
+        setState(() {
+          _messages.add({'role': 'ai', 'text': 'Erro ao processar sua mensagem. Tente novamente.'});
+        });
+        print("Erro API Chat: ${response.body}");
+      }
+
+    } catch (e) {
+      print("Erro Chat: $e");
       setState(() {
-        _messages.add({'role': 'ai', 'text': aiResponse});
+        _messages.add({'role': 'ai', 'text': 'Erro de conexão. Verifique sua internet.'});
+      });
+    } finally {
+      setState(() {
         _isSending = false;
       });
     }
@@ -46,7 +66,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Mentoria IA: Conversa Equilibrada'),
+        title: const Text('Mentoria IA'),
         automaticallyImplyLeading: false,
       ),
       body: Column(
@@ -86,7 +106,7 @@ class _ChatScreenState extends State<ChatScreen> {
               child: TextField(
                 controller: _textController,
                 onSubmitted: (value) => _sendMessage(),
-                decoration: const InputDecoration.collapsed(hintText: 'Digite sua dúvida ou desabafo...'),
+                decoration: const InputDecoration.collapsed(hintText: 'Digite aqui...'),
                 enabled: !_isSending,
               ),
             ),

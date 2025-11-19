@@ -17,7 +17,9 @@ class ChatBubble extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.all(12.0),
               decoration: BoxDecoration(
-                color: isUser ? Theme.of(context).primaryColor.withOpacity(0.9) : Theme.of(context).colorScheme.secondary.withOpacity(0.9),
+                color: isUser 
+                    ? Theme.of(context).primaryColor.withValues(alpha: 0.9) 
+                    : Theme.of(context).colorScheme.secondary.withValues(alpha: 0.9),
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(16.0),
                   topRight: const Radius.circular(16.0),
@@ -26,7 +28,7 @@ class ChatBubble extends StatelessWidget {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: Colors.black.withValues(alpha: 0.1),
                     blurRadius: 3,
                     offset: const Offset(0, 2),
                   ),

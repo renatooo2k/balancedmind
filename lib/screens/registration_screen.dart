@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class RegistrationScreen extends StatefulWidget {
   const RegistrationScreen({super.key});
@@ -15,52 +17,76 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   final TextEditingController _confirmPasswordController = TextEditingController();
   bool _isLoading = false;
 
-  // Função preparada para a chamada da API de Cadastro
   Future<void> _handleRegistration() async {
-    // Valida o formulário
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
-    // Verifica se as senhas coincidem
     if (_passwordController.text != _confirmPasswordController.text) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('As senhas não coincidem!'),
-          backgroundColor: Colors.red,
-        ),
+        const SnackBar(content: Text('As senhas não coincidem!'), backgroundColor: Colors.red),
       );
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
-    // --- PONTO DE INTEGRAÇÃO COM BACKEND: CADASTRO ---
-    // Aqui você faria a chamada HTTP (POST) para sua API de Cadastro.
-    // O body JSON conteria:
-    // {
-    //   "nome": _nameController.text,
-    //   "email": _emailController.text,
-    //   "password": _passwordController.text
-    // }
-    
-    // Simulação de espera de API
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      final url = Uri.parse('https://balancedmind.lat/api/v1/auth/signup');
+      
+      final Map<String, String> bodyData = {
+        "email": _emailController.text.trim(),
+        "password": _passwordController.text,
+        "username": _nameController.text.trim()
+      };
 
-    setState(() {
-      _isLoading = false;
-    });
+      print("----- TENTANDO CADASTRAR -----");
+      print("curl --location '${url.toString()}' \\");
+      print("--header 'Content-Type: application/json' \\");
+      print("--data-raw '${jsonEncode(bodyData)}'");
+      print("------------------------------");
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Cadastro realizado com sucesso! Pode fazer o login.'),
-          backgroundColor: Colors.green,
-        ),
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode(bodyData),
       );
-      Navigator.of(context).pop();
+
+      print("STATUS CODE: ${response.statusCode}");
+      print("RESPOSTA: ${response.body}");
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Conta criada com sucesso!'), backgroundColor: Colors.green),
+          );
+          Navigator.of(context).pop();
+        }
+      } else {
+        String errorMsg = "Falha ao criar conta.";
+        try {
+          final data = jsonDecode(response.body);
+          errorMsg = data['message'] ?? data['error'] ?? errorMsg;
+        } catch (_) {
+          errorMsg = response.body;
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Erro ($errorMsg)'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    } catch (e) {
+      print("ERRO EXCEPTION: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Erro de conexão.'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
@@ -71,14 +97,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         title: const Text('Criar Nova Conta'),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: IconThemeData(
-          color: Theme.of(context).primaryColor,
-        ),
-        titleTextStyle: TextStyle(
-          color: Theme.of(context).primaryColor,
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
-        ),
+        iconTheme: IconThemeData(color: Theme.of(context).primaryColor),
+        titleTextStyle: TextStyle(color: Theme.of(context).primaryColor, fontSize: 20, fontWeight: FontWeight.bold),
       ),
       body: Center(
         child: SingleChildScrollView(
@@ -86,99 +106,40 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           child: Form(
             key: _formKey,
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                Text(
-                  'Bem-vindo(a) ao BalancedMind',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: const Color(0xFF1F2937),
-                      ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Preencha os dados para começar.',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
+                Text('Bem-vindo(a) ao BalancedMind', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 40),
-
                 TextFormField(
                   controller: _nameController,
-                  decoration: InputDecoration(
-                    labelText: 'Nome Completo',
-                    prefixIcon: const Icon(Icons.person),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Por favor, insira o seu nome.';
-                    }
-                    return null;
-                  },
+                  decoration: InputDecoration(labelText: 'Nome de Usuário', prefixIcon: const Icon(Icons.person), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                  validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null,
                 ),
                 const SizedBox(height: 16),
-
                 TextFormField(
                   controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(
-                    labelText: 'Email',
-                    prefixIcon: const Icon(Icons.email),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty || !value.contains('@')) {
-                      return 'Por favor, insira um email válido.';
-                    }
-                    return null;
-                  },
+                  decoration: InputDecoration(labelText: 'Email', prefixIcon: const Icon(Icons.email), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
                 ),
                 const SizedBox(height: 16),
-
                 TextFormField(
                   controller: _passwordController,
                   obscureText: true,
-                  decoration: InputDecoration(
-                    labelText: 'Senha',
-                    prefixIcon: const Icon(Icons.lock),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                   validator: (value) {
-                    if (value == null || value.length < 6) {
-                      return 'A senha deve ter pelo menos 6 caracteres.';
-                    }
-                    return null;
-                  },
+                  decoration: InputDecoration(labelText: 'Senha', prefixIcon: const Icon(Icons.lock), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                  // Vamos validar a senha para evitar recusa do servidor
+                  validator: (v) => v!.length < 6 ? 'Senha muito curta' : null,
                 ),
                 const SizedBox(height: 16),
-
                 TextFormField(
                   controller: _confirmPasswordController,
                   obscureText: true,
-                  decoration: InputDecoration(
-                    labelText: 'Confirmar Senha',
-                    prefixIcon: const Icon(Icons.lock_outline),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                   validator: (value) {
-                    if (value != _passwordController.text) {
-                      return 'As senhas não coincidem.';
-                    }
-                    return null;
-                  },
+                  decoration: InputDecoration(labelText: 'Confirmar Senha', prefixIcon: const Icon(Icons.lock_outline), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
                 ),
                 const SizedBox(height: 30),
-
                 _isLoading
                     ? const Center(child: CircularProgressIndicator())
                     : ElevatedButton(
                         onPressed: _handleRegistration,
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: const Size(double.infinity, 55),
-                        ),
+                        style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 55)),
                         child: const Text('Registrar', style: TextStyle(fontSize: 18)),
                       ),
               ],
